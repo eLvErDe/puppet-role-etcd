@@ -18,6 +18,9 @@
 # @param peer_port
 #  Etcd port to communicate with cluster peers
 #
+# @param cleanup_first
+#  DANGEREOUS: Cleanup etcd files before deploying, useful if you want to boostrap over existing and do not care about existing data
+#
 # @debug
 #  Enable etcd verbose log messages
 #
@@ -28,6 +31,7 @@ class role_etcd (
   String[3] $cluster_token = 'etcd-cluster',
   Stdlib::Port $client_port = 2379,
   Stdlib::Port $peer_port = 2380,
+  Boolean $cleanup_first = false,
   Boolean $debug = false,
 
   ) {
@@ -61,6 +65,17 @@ class role_etcd (
   } else {
     fail("Cannot find myself in etcd \$cluster_host, as fqdn (${::fqdn}), hostname (${::hostname}), IPv4 addr (${ipv4_addr}) or IPv6 addr (${ipv6_addr})  on the system")
   }
+  $data_dir = "/var/lib/etcd/${myself}.etcd"
+
+  ### If cleanup is asked (to re-boostrap from scratch, do it as first stage)
+  stage { 'cleanup_first': }
+  Stage['cleanup_first'] -> Stage['main']
+  if ($cleanup_first) {
+    class { 'role_etcd::cleanup_first':
+      data_dir => $data_dir,
+      stage    => cleanup_first,
+    }
+  }
 
   ### Deploy cluster using cristifalcas/etcd
   $initial_cluster = $cluster_hosts.map |$host| { "${host}=http://${host}:${peer_port}" }
@@ -78,6 +93,7 @@ class role_etcd (
   file { '/etc/etcd': ensure => 'directory' }
   class { 'etcd':
     config_file_path            => $config_file_path,
+    data_dir                    => $data_dir,
     etcd_name                   => $myself,
     listen_client_urls          => "http://0.0.0.0:${client_port}",
     advertise_client_urls       => "http://${myself}:${client_port},http://127.0.0.1:${client_port}",
