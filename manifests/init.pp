@@ -106,4 +106,11 @@ class role_etcd (
   }
   File['/etc/etcd'] -> Class['etcd']
 
+  # Deploy a cron job doing weekly defrag and remote start sleep
+  # To avoid defragmenting all cluster nodes at the same
+  file { '/etc/cron.weekly/puppet-etcd-defrag':
+    source  => 'puppet:///modules/role_etcd/target/etc/cron.weekly/puppet-etcd-defrag',
+    mode    => '0755',
+  }
+
 }
