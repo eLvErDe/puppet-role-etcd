@@ -33,6 +33,7 @@ class role_etcd (
   Stdlib::Port $peer_port = 2380,
   Boolean $cleanup_first = false,
   Boolean $debug = false,
+  Optional[Integer[0]] $auto_compaction_retention = undef,
 
   ) {
 
@@ -101,6 +102,7 @@ class role_etcd (
     initial_advertise_peer_urls => "http://${myself}:${peer_port}",
     initial_cluster             => $initial_cluster,
     debug                       => $debug,
+    auto_compaction_retention   => $auto_compaction_retention,
   }
   File['/etc/etcd'] -> Class['etcd']
 
