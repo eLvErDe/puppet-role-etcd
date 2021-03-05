@@ -4,9 +4,9 @@
    "author":"Letz-IT",
    "summary":"Deploy etcd cluster",
    "license":"BSD",
-   "source":"https://git.earthlab.lu/puppet/role_etcd.git",
-   "project_page":"https://git.earthlab.lu/puppet/role_etcd",
-   "issues_url":"https://git.earthlab.lu/puppet/role_etcd/issues",
+   "source":"https://github.com/eLvErDe/puppet-role-etcd.git",
+   "project_page":"https://github.com/eLvErDe/puppet-role-etcd.git",
+   "issues_url":"https://github.com/eLvErDe/puppet-role-etcd/issues",
    "dependencies":[
       {
          "name":"puppetlabs/stdlib",
@@ -25,7 +25,8 @@
       {
          "operatingsystem":"Debian",
          "operatingsystemrelease":[
-            "10"
+            "10",
+            "11"
          ]
       }
    ],
