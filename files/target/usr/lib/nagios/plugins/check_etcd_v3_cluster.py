@@ -241,14 +241,18 @@ def parse_args() -> argparse.Namespace:
 
     cluster_members_parser = subparsers.add_parser("cluster_members", help="Check members of etcd cluster")
     cluster_members_parser.add_argument(
-        "--warning", type=int, nargs="?", required=False, help="Minimum number (inclusive) of dead node(s) in cluster to trigger warning"
+        "--warning", type=int, nargs="?", required=False, help="Minimum number (inclusive) of dead node(s) in cluster to trigger warning, -1 as null value"
     )
     cluster_members_parser.add_argument(
-        "--critical", type=int, nargs="?", required=False, help="Mimumum number (inclusive) of dead node(s) in cluster to trigger critical"
+        "--critical", type=int, nargs="?", required=False, help="Mimumum number (inclusive) of dead node(s) in cluster to trigger critical, -1 as null value"
     )
     args = parser.parse_args()
 
     if args.action == "cluster_members":
+        if args.warning == -1:
+            args.warning = None
+        if args.critical == -1:
+            args.critical = None
         if args.warning is not None and args.critical is not None and args.warning > args.critical:
             parser.error("Warning threshold cannot be greater than critical one")
 
