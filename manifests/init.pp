@@ -24,6 +24,9 @@
 # @debug
 #  Enable etcd verbose log messages
 #
+# @deploy_nagios_script
+#  Deploy Nagios style monitoring script to be run through NRPE, defaults to true
+#
 
 class role_etcd (
 
@@ -34,6 +37,7 @@ class role_etcd (
   Boolean $cleanup_first = false,
   Boolean $debug = false,
   Optional[Integer[0]] $auto_compaction_retention = undef,
+  Boolean $deploy_nagios_script = true,
 
   ) {
 
@@ -109,8 +113,37 @@ class role_etcd (
   # Deploy a cron job doing weekly defrag and remote start sleep
   # To avoid defragmenting all cluster nodes at the same
   file { '/etc/cron.weekly/puppet-etcd-defrag':
-    source  => 'puppet:///modules/role_etcd/target/etc/cron.weekly/puppet-etcd-defrag',
-    mode    => '0755',
+    source => 'puppet:///modules/role_etcd/target/etc/cron.weekly/puppet-etcd-defrag',
+    mode   => '0755',
+  }
+
+  # Deploy Nagios monitoring script
+  if $deploy_nagios_script {
+    case $::osfamily {
+      'RedHat': {
+        $nrpe_conf = '/etc/nrpe.d'
+        $nrpe_service = 'nrpe'
+      }
+      'Debian': {
+        $nrpe_conf = '/etc/nagios/nrpe.d'
+        $nrpe_service = 'nagios-nrpe-server'
+      }
+    }
+    exec { "role_etcd_restart_${nrpe_service}":
+      path        => ['/usr/bin','/usr/sbin', '/bin', '/sbin'],
+      command     => "service ${nrpe_service} restart",
+      refreshonly => true,
+    }
+    file { '/usr/lib/nagios/plugins/check_etcd_v3_cluster.py':
+      source => 'puppet:///modules/role_etcd/target/usr/lib/nagios/plugins/check_etcd_v3_cluster.py',
+      mode   => '0755',
+    }
+    file { "${nrpe_conf}/00_puppet_check_etcd_v3_cluster_members_health.cfg":
+      path    => "${nrpe_conf}/00_puppet_check_etcd_v3_cluster_members_health.cfg",
+      ensure  => 'file',
+      content => "command[check_crm]=/usr/lib/nagios/plugins/check_etcd_v3_cluster.py cluster_members --warning \$ARG1\$ --critical \$ARG2\$\n",
+      notify  => Exec["role_etcd_restart_${nrpe_service}"],
+    }
   }
 
 }
