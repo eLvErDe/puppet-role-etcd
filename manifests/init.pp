@@ -141,7 +141,7 @@ class role_etcd (
     file { "${nrpe_conf}/00_puppet_check_etcd_v3_cluster_members_health.cfg":
       path    => "${nrpe_conf}/00_puppet_check_etcd_v3_cluster_members_health.cfg",
       ensure  => 'file',
-      content => "command[check_crm]=/usr/lib/nagios/plugins/check_etcd_v3_cluster.py cluster_members --warning \$ARG1\$ --critical \$ARG2\$\n",
+      content => "command[check_etcd_v3_cluster_members_health]=/usr/lib/nagios/plugins/check_etcd_v3_cluster.py cluster_members --warning \$ARG1\$ --critical \$ARG2\$\n",
       notify  => Exec["role_etcd_restart_${nrpe_service}"],
     }
   }
