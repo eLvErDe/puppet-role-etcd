@@ -182,7 +182,7 @@ class CheckEtcdCluster:
                         "took": matched_dict["took"],
                         "peer_urls": [matched_dict["endpoint"]],
                         "client_urls": [],
-                        "error": matched_dict.get(error, None),
+                        "error": matched_dict.get("error", None),
                     }
                     parsed.append(parsed_entry)
             else:  # If no json.decoder.JSONDecodeError raised, we're running a recent etcdctl not returning 1 in case of failure with json mode
