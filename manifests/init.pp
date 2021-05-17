@@ -27,6 +27,10 @@
 # @deploy_nagios_script
 #  Deploy Nagios style monitoring script to be run through NRPE, defaults to true
 #
+# @expose_etcd_leader_in_etcd
+#   Deploy a Python script polling etcd for its leader and writing it to /services/etcd/leader/{name,id} keys
+#   Can be useful, for example, to bind a virtual IP to current etcd leader using vip-manager
+#
 
 class role_etcd (
 
@@ -38,6 +42,7 @@ class role_etcd (
   Boolean $debug = false,
   Optional[Integer[0]] $auto_compaction_retention = undef,
   Boolean $deploy_nagios_script = true,
+  Boolean $expose_etcd_leader_in_etcd = false,
 
   ) {
 
@@ -139,11 +144,59 @@ class role_etcd (
       mode   => '0755',
     }
     file { "${nrpe_conf}/00_puppet_check_etcd_v3_cluster_members_health.cfg":
-      path    => "${nrpe_conf}/00_puppet_check_etcd_v3_cluster_members_health.cfg",
       ensure  => 'file',
+      path    => "${nrpe_conf}/00_puppet_check_etcd_v3_cluster_members_health.cfg",
       content => "command[check_etcd_v3_cluster_members_health]=/usr/lib/nagios/plugins/check_etcd_v3_cluster.py cluster_members --warning \$ARG1\$ --critical \$ARG2\$\n",
       notify  => Exec["role_etcd_restart_${nrpe_service}"],
     }
+  }
+
+  if $expose_etcd_leader_in_etcd {
+    ensure_packages('python3-etcd')
+    file { '/usr/local/bin/etcd_leader_to_etcd_keys.py':
+      source  => 'puppet:///modules/role_etcd/target/usr/local/bin/etcd_leader_to_etcd_keys.py',
+      mode    => '0755',
+      require => Package['python3-etcd'],
+      notify  => Service['etcd-leader-to-etcd-keys'],
+    }
+    exec { 'role_etcd-systemctl-daemon-reload':
+      path        => $::path,
+      command     => 'systemctl daemon-reload',
+      onlyif      => 'which systemctl',
+      refreshonly => true,
+    }
+    exec { 'role_etcd-systemctl-enable-etcd-leader-to-etcd-keys':
+      path        => $::path,
+      command     => 'systemctl enable etcd-leader-to-etcd-keys.service',
+      onlyif      => 'which systemctl',
+      refreshonly => true,
+    }
+    $poll_delay = 10
+    file { '/etc/default/etcd-leader-to-etcd-keys':
+      force   => true,
+      content => inline_template("ARGS=\"--peers <%= @cluster_hosts.map{ |host| \"#{host}:#{@client_port}\" }.join(' ') %> --delay <%= @poll_delay %>\"\n"),
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+      notify  => Service['etcd-leader-to-etcd-keys'],
+    }
+    file { '/etc/systemd/system/etcd-leader-to-etcd-keys.service' :
+      force   => true,
+      source  => 'puppet:///modules/role_etcd/target/etc/systemd/system/etcd-leader-to-etcd-keys.service',
+      owner   => 'root',
+      group   => 'root',
+      mode    => '0644',
+      notify  => [Exec['role_etcd-systemctl-enable-etcd-leader-to-etcd-keys'], Exec['role_etcd-systemctl-daemon-reload'], Service['etcd-leader-to-etcd-keys']],
+      require => [File['/usr/local/bin/etcd_leader_to_etcd_keys.py'], File['/etc/default/etcd-leader-to-etcd-keys']],
+    }
+    service { 'etcd-leader-to-etcd-keys':
+      ensure => 'running',
+      enable => true,
+    }
+    File['/etc/systemd/system/etcd-leader-to-etcd-keys.service']
+      -> Exec['role_etcd-systemctl-daemon-reload']
+      -> Exec['role_etcd-systemctl-enable-etcd-leader-to-etcd-keys']
+      -> Service['etcd-leader-to-etcd-keys']
   }
 
 }
