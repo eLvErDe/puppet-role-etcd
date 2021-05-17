@@ -9,6 +9,7 @@ Check etcd cluster v3 using etcdctl command
 """
 
 
+import re
 import sys
 import json
 import shutil
@@ -137,7 +138,7 @@ class CheckEtcdCluster:
         members = [V3ClusterMember(id=x["ID"], name=x["name"], peer_urls=x["peerURLs"], client_urls=x["clientURLs"]) for x in parsed["members"]]
         return members
 
-    def get_v3_members_health(self) -> List[V3ClusterMemberHealth]:  # pylint: disable=too-many-locals
+    def get_v3_members_health(self) -> List[V3ClusterMemberHealth]:  # pylint: disable=too-many-locals,too-many-branches,too-many-statements
         """
         Get cluster members health, member list does not return it
 
@@ -155,8 +156,36 @@ class CheckEtcdCluster:
         env = {"ETCDCTL_API": "3"}
         cmd = [self.etcdctl_path, "--endpoints=%s" % ",".join(endpoint_all_members), "endpoint", "health", "-w", "json"]
         try:
-            output = subprocess.check_output(cmd, env=env, stderr=subprocess.PIPE)
-            parsed = json.loads(output)
+            res = subprocess.run(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            output = res.stdout
+            try:
+                parsed = json.loads(output)
+            except json.decoder.JSONDecodeError:  # older version does not handle -w json :/
+                parsed = []
+                for entry in str(output, "utf-8").splitlines():
+                    matcher_healthy = re.match(r"^(?P<endpoint>[^ ]+) is (?P<health>healthy):.+took = (?P<took>[^ ]+)$", entry)
+                    matcher_unhealthy = re.match(r"^(?P<endpoint>[^ ]+) is (?P<health>unhealthy): (?P<error>.+)$", entry)
+                    if matcher_healthy:
+                        matched_dict = matcher_healthy.groupdict()
+                        health = True
+                    elif matcher_unhealthy:
+                        matched_dict = matcher_unhealthy.groupdict()
+                        health = False
+                    else:
+                        raise AssertionError("Old etcd without JSON support but unparsable line %s" % entry)
+                    assert "endpoint" in matched_dict, "Old etcd without JSON support but unparsable line %s" % entry
+                    assert "health" in matched_dict, "Old etcd without JSON support but unparsable line %s" % entry
+                    assert "took" in matched_dict, "Old etcd without JSON support but unparsable line %s" % entry
+                    parsed_entry = {
+                        "endpoint": matched_dict["endpoint"],
+                        "health": health,
+                        "took": matched_dict["took"],
+                        "peer_urls": [matched_dict["endpoint"]],
+                        "client_urls": [],
+                    }
+                    parsed.append(parsed_entry)
+            else:  # If no json.decoder.JSONDecodeError raised, we're running a recent etcdctl not returning 1 in case of failure with json mode
+                res.check_returncode()
         except subprocess.CalledProcessError as exc:
             cmd_str = " ".join("%s=%s" % x for x in env.items()) + " " + " ".join(cmd)
             stdout_l = [x.strip() for x in str(exc.stdout, "utf-8").splitlines() if x.strip()]
