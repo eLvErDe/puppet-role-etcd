@@ -1,0 +1,22 @@
+[Unit]
+Description=Periodically poll for etcd leader and write its id and name to etcd keys
+After=network.target time-sync.target syslog.target
+
+[Service]
+Environment=NO_LOGS_TS=1
+EnvironmentFile=-/etc/default/etcd-leader-to-etcd-keys
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/etcd_leader_to_etcd_keys.py $ARGS
+WorkingDirectory=/tmp
+User=root
+Group=root
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=etcd-leader-to-etcd-keys
+Restart=always
+RestartSec=60
+StartLimitInterval=3600
+StartLimitBurst=30
+
+[Install]
+WantedBy=multi-user.target
